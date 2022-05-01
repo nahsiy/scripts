@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Mise en place de l'écran
+xrandr --output DVI-D-1 --off
+
+echo 3 >> /proc/sys/vm/drop_caches                                                                                                                                                                            
+echo 1 >> /proc/sys/vm/compact_memory                                                                                                                                                                      
+sysctl vm.stat_interval=120                                                                                                                                                                                   
+sysctl -w kernel.watchdog=0
+echo FFF >> /sys/bus/workqueue/devices/writeback/cpumask
+echo 0 >> /sys/bus/workqueue/devices/writeback/numa
+echo 400000 >> /sys/module/kvm/parameters/halt_poll_ns
+
+# Audio
+runuser -l yishan -c '/home/yishan/Documents/scripts/scream/Receivers/unix/build/scream -i br0 -p 4011' >/dev/null 2>&1 &
+
+# QEMU name and PID
+OPTS="-name win10"
+OPTS="$OPTS -pidfile /tmp/win10"
+
+# Activation KVM & others parameters
+OPTS="$OPTS -enable-kvm"
+OPTS="$OPTS -nodefaults"
+OPTS="$OPTS -serial none"
+OPTS="$OPTS -no-user-config"
+
+# Processor
+OPTS="$OPTS -cpu host,rdtscp=off,host-cache-info=off,kvm=off,l3-cache=on,kvm-hint-dedicated=on,migratable=no,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,+invtsc,+topoext" 
+OPTS="$OPTS -smp 10,sockets=1,cores=5,threads=2"
+OPTS="$OPTS -global kvm-pit.lost_tick_policy=discard"
+
+# Machine
+OPTS="$OPTS -M q35,accel=kvm,kernel_irqchip=on,mem-merge=off"
+
+# Memory
+OPTS="$OPTS -m 16384,slots=1,maxmem=24G"
+OPTS="$OPTS -mem-prealloc"
+OPTS="$OPTS -no-hpet"
+OPTS="$OPTS -overcommit mem-lock=on"
+
+# Hardware Clock
+OPTS="$OPTS -rtc base=localtime"
+
+# Graphicpassthrough (GeForce RTX 2060 Rev. A)
+OPTS="$OPTS -device pcie-root-port,bus=pcie.0,id=root_port1,chassis=0,slot=0,x-speed=8,x-width=16"
+OPTS="$OPTS -device vfio-pci,host=27:00.0,id=hostdev0,bus=root_port1,addr=0x00,multifunction=on"
+OPTS="$OPTS -device vfio-pci,host=27:00.1,id=hostdev1,bus=root_port1,addr=0x00.1"
+OPTS="$OPTS -device vfio-pci,host=27:00.2,id=hostdev2,bus=root_port1,addr=0x00.2"
+OPTS="$OPTS -device vfio-pci,host=27:00.3,id=hostdev3,bus=root_port1,addr=0x00.3"
+
+# Disque Dur Samsung SSD 860 EVO 250GB en SATA dédié complètement à la VM
+OPTS="$OPTS -device qemu-xhci,id=xhci" 
+OPTS="$OPTS -drive if=none,id=disk2,file=/dev/sde,format=raw,cache=none,aio=threads"
+OPTS="$OPTS -object iothread,id=iothread1"
+OPTS="$OPTS -device virtio-blk-pci,drive=disk2,scsi=off,iothread=iothread1"
+
+# Others disks (Iso Win d'install + Iso Drivers Virtio)
+OPTS="$OPTS -device ide-cd,drive=drive-cd-disk1,id=cd-disk1,unit=0,bus=ide.0"
+OPTS="$OPTS -drive file=/home/yishan/Téléchargements/Win10_21H2_French_x64.iso,if=none,id=drive-cd-disk1,media=cdrom"
+OPTS="$OPTS -device ide-cd,drive=drive-cd-disk2,id=cd-disk2,unit=0,bus=ide.1"
+OPTS="$OPTS -drive file=/home/yishan/Téléchargements/virtio-win-0.1.215.iso,if=none,id=drive-cd-disk2,media=cdrom"
+
+# OVMF (OVMF est un portage du firmware tianocore d'Intel sur la machine virtuelle qemu. Cela permet de déboguer facilement et d'expérimenter avec le firmware UEFI, que ce soit pour tester Ubuntu ou pour utiliser le shell EFI (inclus).)
+OPTS="$OPTS -drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd"
+
+# Network (Adresse mac générée de manière alétoire)
+# date +%s | md5sum | head -c 6 | sed -e 's/\([0-9A-Fa-f]\{2\}\)/\1:/g' -e 's/\(.*\):$/\1/' | sed -e 's/^/52:54:00:/'
+OPTS="$OPTS -device virtio-net,netdev=net0,mac=52:54:00:cb:e1:9a"
+OPTS="$OPTS -netdev tap,ifname=tap1,id=net0,script=no"
+
+# Périphériques (Clavier / souris)
+OPTS="$OPTS -device nec-usb-xhci,id=xhci2"
+OPTS="$OPTS -device virtio-mouse-pci,id=input0"
+OPTS="$OPTS -device virtio-keyboard-pci,id=input1"
+OPTS="$OPTS -object input-linux,id=mouse1,evdev=/dev/input/by-id/usb-Logitech_USB_Receiver-if01-event-mouse,grab_all=yes,grab-toggle=alt-alt"
+OPTS="$OPTS -object input-linux,id=kbd1,evdev=/dev/input/by-id/usb-Logitech_USB_Receiver-if01-event-mouse,grab_all=yes,grab-toggle=alt-alt"
+
+
+# Logs
+OPTS="$OPTS -d guest_errors -D /var/log/qemu.log"
+
+# Boot
+OPTS="$OPTS -boot order=c"
+
+# Ajustements sortie graphique  avec l'utilisation du VGA passthrough
+OPTS="$OPTS -nographic"
+OPTS="$OPTS -daemonize"
+
+# Lancement de la VM
+sudo taskset -c 0-7 qemu-system-x86_64 $OPTS
