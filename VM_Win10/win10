@@ -12,7 +12,8 @@ echo 0 >> /sys/bus/workqueue/devices/writeback/numa
 echo 400000 >> /sys/module/kvm/parameters/halt_poll_ns
 
 # Audio
-runuser -l yishan -c '/home/yishan/Documents/scripts/scream/Receivers/unix/build/scream -i br0 -p 4011' >/dev/null 2>&1 &
+runuser -u yishan -c '~/Documents/scripts/scream/Receivers/unix/build/scream -i br0 -p 4011' >/dev/null 2>&1 &
+
 
 # QEMU name and PID
 OPTS="-name win10"
@@ -23,6 +24,9 @@ OPTS="$OPTS -enable-kvm"
 OPTS="$OPTS -nodefaults"
 OPTS="$OPTS -serial none"
 OPTS="$OPTS -no-user-config"
+
+# Boot
+OPTS="$OPTS -boot order=c"
 
 # Processor
 OPTS="$OPTS -cpu host,rdtscp=off,host-cache-info=off,kvm=off,l3-cache=on,kvm-hint-dedicated=on,migratable=no,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,+invtsc,+topoext" 
@@ -50,7 +54,7 @@ OPTS="$OPTS -device vfio-pci,host=27:00.3,id=hostdev3,bus=root_port1,addr=0x00.3
 
 # Disque Dur Samsung SSD 860 EVO 250GB en SATA dédié complètement à la VM
 OPTS="$OPTS -device qemu-xhci,id=xhci" 
-OPTS="$OPTS -drive if=none,id=disk2,file=/dev/sde,format=raw,cache=none,aio=threads"
+OPTS="$OPTS -drive if=none,id=disk2,file=/dev/sdd,format=raw,cache=none,aio=threads"
 OPTS="$OPTS -object iothread,id=iothread1"
 OPTS="$OPTS -device virtio-blk-pci,drive=disk2,scsi=off,iothread=iothread1"
 
@@ -72,15 +76,12 @@ OPTS="$OPTS -netdev tap,ifname=tap1,id=net0,script=no"
 OPTS="$OPTS -device nec-usb-xhci,id=xhci2"
 OPTS="$OPTS -device virtio-mouse-pci,id=input0"
 OPTS="$OPTS -device virtio-keyboard-pci,id=input1"
-OPTS="$OPTS -object input-linux,id=mouse1,evdev=/dev/input/by-id/usb-Logitech_USB_Receiver-if01-event-mouse,grab_all=yes,grab-toggle=alt-alt"
-OPTS="$OPTS -object input-linux,id=kbd1,evdev=/dev/input/by-id/usb-Logitech_USB_Receiver-if01-event-mouse,grab_all=yes,grab-toggle=alt-alt"
-
+OPTS="$OPTS -object input-linux,id=mouse1,evdev=/dev/input/by-id/usb-Logitech_USB_Receiver-if01-event-mouse,grab-toggle=alt-alt"
+OPTS="$OPTS -object input-linux,id=kbd1,evdev=/dev/input/by-id/usb-Logitech_USB_Receiver-if01-event-kbd,grab_all=yes,grab-toggle=alt-alt"
 
 # Logs
 OPTS="$OPTS -d guest_errors -D /var/log/qemu.log"
 
-# Boot
-OPTS="$OPTS -boot order=c"
 
 # Ajustements sortie graphique  avec l'utilisation du VGA passthrough
 OPTS="$OPTS -nographic"
